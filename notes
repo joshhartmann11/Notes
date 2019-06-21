@@ -1,0 +1,94 @@
+#!/bin/bash
+SCRIPT="$0"
+
+readonly DIRECTORY="/home/josh/Documents/Notes"
+readonly EDITOR="nano"
+
+function help() {
+    printf "notes NOTE\n"
+    printf "\t-h|--help                 Show this help menu\n"
+    printf "\t-l|--list                 List all the notes\n"
+    printf "\t-d|--delete [NOTE]        Delete note\n"
+    printf "\t-s|--set-dir [DIR]        Set the notes directory\n"
+    printf "\t-t|--set-editor [EDITOR]  Set the text editor\n"
+    printf "\t-c|--config               Show the configuration\n"
+}
+
+function config() {
+    printf "Configuration:\n"
+    printf "\tInstall Location = ${SCRIPT}\n"
+    printf "\tNotes Directory  = ${DIRECTORY}\n"
+    printf "\tEditor           = ${EDITOR}\n"
+}
+
+if [[ $# == 0 ]]; then
+    help
+fi
+
+while [[ $# -gt 0 ]]
+do
+key="$1"
+positional_args=()
+case $key in
+    -h|--help)
+    help
+    shift
+    ;;
+    -c|--config)
+    config
+    shift
+    ;;
+    -s|--set-dir)
+    set_dir="$2"
+    shift
+    shift
+    ;;
+    -e|--set-editor)
+    set_editor="$2"
+    shift
+    shift
+    ;;
+    -d|--delete)
+    delete="$2"
+    shift
+    shift
+    ;;
+    -l|--list)
+    list="please"
+    shift
+    ;;
+    *)
+    file="$1"
+    shift
+    ;;
+esac
+done
+
+# Yes these modify THIS script, it makes life easy
+if [[ ! -z $set_dir ]]; then
+    if [[ ! -d "${set_dir}" ]]; then
+        mkdir -p "${set_dir}"
+    fi
+    sed -i '0,/DIRECTORY/s|DIRECTORY=.*|DIRECTORY="'"${set_dir}"'"|' $SCRIPT
+fi
+
+if [[ ! -z $set_editor ]]; then
+    if [ "$(id -u)" != "0" ]; then
+        echo "You need to be root to change the editor" # For safety
+        # This is because EDITOR is an unclean variable when called
+    else
+        sed -i '0,/EDITOR/s|EDITOR=.*|EDITOR="'"${set_editor}"'"|' $SCRIPT
+    fi
+fi
+
+if [[ ! -z $list ]]; then
+    ls "${DIRECTORY}/"
+fi
+
+if [[ ! -z $delete ]]; then
+    rm "${DIRECTORY}/${delete}"
+fi
+
+if [[ ! -z $file ]]; then
+    $EDITOR "${DIRECTORY}/${file}"
+fi
