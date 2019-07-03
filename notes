@@ -1,17 +1,21 @@
 #!/bin/bash
 SCRIPT="$0"
 
-readonly DIRECTORY="/home/josh/Documents/Notes"
+readonly DIRECTORY="${HOME}/Documents/Notes"
 readonly EDITOR="nano"
+readonly FILE_MANAGER="nautilus"
 
 function help() {
     printf "notes NOTE\n"
     printf "\t-h|--help                 Show this help menu\n"
     printf "\t-l|--list                 List all the notes\n"
+    printf "\t-c|--cat                  Cat a note\n"
     printf "\t-d|--delete [NOTE]        Delete note\n"
-    printf "\t-s|--set-dir [DIR]        Set the notes directory\n"
-    printf "\t-t|--set-editor [EDITOR]  Set the text editor\n"
-    printf "\t-c|--config               Show the configuration\n"
+    printf "\t-o|--open-dir             Open the notes directory\n"
+    printf "\t--config                  Show the configuration\n"
+    printf "\t--set-dir [DIR]           Set the notes directory\n"
+    printf "\t--set-editor [EDITOR]     Set the text editor\n"
+    printf "\t--set-file-man [MANAGER]  Set the file manager\n"
 }
 
 function config() {
@@ -19,6 +23,7 @@ function config() {
     printf "\tInstall Location = ${SCRIPT}\n"
     printf "\tNotes Directory  = ${DIRECTORY}\n"
     printf "\tEditor           = ${EDITOR}\n"
+    printf "\tFile Manager     = ${FILE_MANAGER}\n"
 }
 
 if [[ $# == 0 ]]; then
@@ -34,17 +39,22 @@ case $key in
     help
     shift
     ;;
-    -c|--config)
+    --config)
     config
     shift
     ;;
-    -s|--set-dir)
+    --set-dir)
     set_dir="$2"
     shift
     shift
     ;;
-    -e|--set-editor)
+    --set-editor)
     set_editor="$2"
+    shift
+    shift
+    ;;
+    --set-file-man)
+    set_file_man="$2"
     shift
     shift
     ;;
@@ -55,6 +65,15 @@ case $key in
     ;;
     -l|--list)
     list="please"
+    shift
+    ;;
+    -o|--open-dir)
+    open_dir="please"
+    shift
+    ;;
+    -c|--cat)
+    cat="$2"
+    shift
     shift
     ;;
     *)
@@ -81,6 +100,24 @@ if [[ ! -z $set_editor ]]; then
     fi
 fi
 
+if [[ ! -z $set_editor ]]; then
+    if [ "$(id -u)" != "0" ]; then
+        echo "You need to be root to change the file manager" # For safety
+        # This is because MANAGER is an unclean variable when called
+    else
+        sed -i '0,/FILE_MANAGER/s|FILE_MANAGER=.*|FILE_MANAGER="'"${set_file_man}"'"|' $SCRIPT
+    fi
+fi
+
+if [[ ! -z $open_dir ]]; then
+    command -v ${FILE_MANAGER} > /dev/null
+    if [[ "$?" == "0" ]]; then
+        $FILE_MANAGER "${DIRECTORY}"
+    else
+        echo "Expecting ${FILE_MANAGER}, change via --set-file-man flag"
+    fi
+fi
+
 if [[ ! -z $list ]]; then
     ls "${DIRECTORY}/"
 fi
@@ -89,6 +126,17 @@ if [[ ! -z $delete ]]; then
     rm "${DIRECTORY}/${delete}"
 fi
 
-if [[ ! -z $file ]]; then
-    $EDITOR "${DIRECTORY}/${file}"
+if [[ ! -z $cat ]]; then
+    cat "${DIRECTORY}/${cat}"
 fi
+
+if [[ ! -z $file ]]; then
+    command -v ${EDITOR}
+    if [[ "$?" == "0" ]]; then
+        $EDITOR "${DIRECTORY}/${file}"
+    else
+        echo "Expecting ${EDITOR}, change via --set-editor flag"
+    fi
+    
+fi
+
