@@ -4,21 +4,33 @@ SCRIPT="$0"
 readonly DIRECTORY="${HOME}/Documents/Notes"
 readonly EDITOR="nano"
 readonly FILE_MANAGER="nautilus"
+readonly REMOTE=""
 
-function help() {
-    printf "notes NOTE\n"
-    printf "\t-h|--help                 Show this help menu\n"
-    printf "\t-l|--list                 List all the notes\n"
-    printf "\t-c|--cat                  Cat a note\n"
-    printf "\t-d|--delete [NOTE]        Delete note\n"
-    printf "\t-o|--open-dir             Open the notes directory\n"
-    printf "\t--config                  Show the configuration\n"
-    printf "\t--set-dir [DIR]           Set the notes directory\n"
-    printf "\t--set-editor [EDITOR]     Set the text editor\n"
-    printf "\t--set-file-man [MANAGER]  Set the file manager\n"
+function assert_sudo() {
+    if [ "$(id -u)" != "0" ]; then
+        echo "You need to be root for this function"
+        exit 1
+    fi
 }
 
-function config() {
+function notes_help() {
+    printf "notes NOTE\n"
+    printf "\t-h|--help                     Show this help menu\n"
+    printf "\t-l|--list                     List all the notes\n"
+    printf "\t-c|--cat                      Cat a note\n"
+    printf "\t-d|--delete [NOTE]            Delete note\n"
+    printf "\t-o|--open-dir                 Open the notes directory\n"
+    printf "\t-s|--sync [MACHINE]           Sync a remote notes repository\n"
+    printf "\t--config                      Show the configuration\n"
+    printf "\t--set-dir [DIR]               Set the notes directory\n"
+    printf "\t--set-editor [EDITOR]         Set the text editor\n"
+    printf "\t--set-file-man [MANAGER]      Set the file manager\n"
+    printf "\t--list-remote                 List remote machines\n"
+    printf "\t--rm-remote [MACHINE]         Remove a remote machine\n"
+    printf "\t--add-remote [MACHINE] [LOC]  Add a remote machine\n"
+}
+
+function notes_config() {
     printf "Configuration:\n"
     printf "\tInstall Location = ${SCRIPT}\n"
     printf "\tNotes Directory  = ${DIRECTORY}\n"
@@ -26,8 +38,101 @@ function config() {
     printf "\tFile Manager     = ${FILE_MANAGER}\n"
 }
 
+function notes_set_dir() {
+    dir="$1"
+    assert_sudo
+    if [[ ! -d "${dir}" ]]; then
+        mkdir -p "${dir}"
+    fi
+    sed -i '0,/DIRECTORY/s|DIRECTORY=.*|DIRECTORY="'"${dir}"'"|' $SCRIPT
+}
+
+function notes_set_editor() {
+    editor="$1"
+    assert_sudo
+    sed -i '0,/EDITOR/s|EDITOR=.*|EDITOR="'"${editor}"'"|' $SCRIPT
+}
+
+function notes_set_file_man() {
+    man="$1"
+    assert_sudo
+    sed -i '0,/EDITOR/s|EDITOR=.*|EDITOR="'"${editor}"'"|' $SCRIPT
+}
+
+function notes_add_remote() {
+    local remote_name="$1"
+    local remote_loc="$2"
+    assert_sudo
+    new_remote="${REMOTE},${remote_name}:${remote_loc}"
+    sed -i '0,/REMOTE/s|REMOTE=.*|REMOTE="'"${new_remote}"'"|' $SCRIPT
+}
+
+function notes_rm_remote() {
+    local rm_remote="$1"
+    assert_sudo
+    new_remote=""
+    for i in $(echo $REMOTE | sed "s/,/ /g"); do
+        # If the remote matches, dont add it
+        machine=`cut -d ":" -f 1 <<< "$i"`
+        if [[ "${machine}" != "${rm_remote}" ]]; then
+            new_remote="${new_remote},${i}"
+        fi
+    done
+    sed -i '0,/REMOTE/s|REMOTE=.*|REMOTE="'"${new_remote}"'"|' $SCRIPT
+}
+
+function notes_list_remote() {
+    for i in $(echo $REMOTE | sed "s/,/ /g"); do
+        echo "$i"
+    done
+}
+
+function notes_delete() {
+    local delete="$1"
+    rm "${DIRECTORY}/${delete}"
+}
+
+function notes_list() {
+    ls "${DIRECTORY}/"
+}
+
+function notes_open_dir() {
+    command -v ${FILE_MANAGER} > /dev/null
+    if [[ "$?" == "0" ]]; then
+        $FILE_MANAGER "${DIRECTORY}"
+    else
+        echo "Expecting ${FILE_MANAGER}, change via --set-file-man flag"
+    fi
+}
+
+function notes_cat() {
+    local cat="$1"
+    cat "${DIRECTORY}/${cat}"
+}
+
+function notes_sync() {
+    local remote="$1"
+    command -v rsync > /dev/null
+    if [[ "$?" == "0" ]]; then
+        rsync "${sync}/*" "${DIRECTORY}"
+    else
+        echo "rsync is not installed"
+    fi
+}
+
+function notes_run() {
+    local file="$1"
+    command -v ${EDITOR} > /dev/null
+    if [[ "$?" == "0" ]]; then
+        $EDITOR "${DIRECTORY}/${file}"
+    else
+        echo "Expecting ${EDITOR}, change via --set-editor flag"
+    fi
+}
+
+
 if [[ $# == 0 ]]; then
-    help
+    notes_help
 fi
 
 while [[ $# -gt 0 ]]
@@ -36,107 +141,69 @@ key="$1"
 positional_args=()
 case $key in
     -h|--help)
-    help
+    notes_help
     shift
     ;;
     --config)
-    config
+    notes_config
     shift
     ;;
     --set-dir)
-    set_dir="$2"
+    notes_set_dir "$2"
     shift
     shift
     ;;
     --set-editor)
-    set_editor="$2"
+    notes_set_editor "$2"
     shift
     shift
     ;;
     --set-file-man)
-    set_file_man="$2"
+    notes_set_file_man "$2"
     shift
     shift
     ;;
+    --add-remote)
+    notes_add_remote "$2" "$3"
+    shift
+    shift
+    shift
+    ;;
+    --rm-remote)
+    notes_rm_remote "$2"
+    shift
+    shift
+    ;;
+    --list-remote)
+    notes_list_remote
+    shift
+    ;;
     -d|--delete)
-    delete="$2"
+    notes_delete "$2"
     shift
     shift
     ;;
     -l|--list)
-    list="please"
+    notes_list
     shift
     ;;
     -o|--open-dir)
-    open_dir="please"
+    notes_open_dir
     shift
     ;;
     -c|--cat)
-    cat="$2"
+    notes_cat "$2"
+    shift
+    shift
+    ;;
+    -s|--sync)
+    notes_sync "$2"
     shift
     shift
     ;;
     *)
-    file="$1"
+    notes_run "$1"
     shift
     ;;
 esac
 done
-
-# Yes these modify THIS script, it makes life easy
-if [[ ! -z $set_dir ]]; then
-    if [[ ! -d "${set_dir}" ]]; then
-        mkdir -p "${set_dir}"
-    fi
-    sed -i '0,/DIRECTORY/s|DIRECTORY=.*|DIRECTORY="'"${set_dir}"'"|' $SCRIPT
-fi
-
-if [[ ! -z $set_editor ]]; then
-    if [ "$(id -u)" != "0" ]; then
-        echo "You need to be root to change the editor" # For safety
-        # This is because EDITOR is an unclean variable when called
-    else
-        sed -i '0,/EDITOR/s|EDITOR=.*|EDITOR="'"${set_editor}"'"|' $SCRIPT
-    fi
-fi
-
-if [[ ! -z $set_editor ]]; then
-    if [ "$(id -u)" != "0" ]; then
-        echo "You need to be root to change the file manager" # For safety
-        # This is because MANAGER is an unclean variable when called
-    else
-        sed -i '0,/FILE_MANAGER/s|FILE_MANAGER=.*|FILE_MANAGER="'"${set_file_man}"'"|' $SCRIPT
-    fi
-fi
-
-if [[ ! -z $open_dir ]]; then
-    command -v ${FILE_MANAGER} > /dev/null
-    if [[ "$?" == "0" ]]; then
-        $FILE_MANAGER "${DIRECTORY}"
-    else
-        echo "Expecting ${FILE_MANAGER}, change via --set-file-man flag"
-    fi
-fi
-
-if [[ ! -z $list ]]; then
-    ls "${DIRECTORY}/"
-fi
-
-if [[ ! -z $delete ]]; then
-    rm "${DIRECTORY}/${delete}"
-fi
-
-if [[ ! -z $cat ]]; then
-    cat "${DIRECTORY}/${cat}"
-fi
-
-if [[ ! -z $file ]]; then
-    command -v ${EDITOR}
-    if [[ "$?" == "0" ]]; then
-        $EDITOR "${DIRECTORY}/${file}"
-    else
-        echo "Expecting ${EDITOR}, change via --set-editor flag"
-    fi
-    
-fi
-
